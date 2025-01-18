@@ -1,5 +1,6 @@
 import 'package:avatar_plus/avatar_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:restaurant_flutter/utils/constant.dart';
 import 'package:giffy_dialog/giffy_dialog.dart';
@@ -15,6 +16,8 @@ class DetailScreen extends StatefulWidget {
 
 class _DetailScreenState extends State<DetailScreen> {
   var db = FirebaseFirestore.instance;
+  var _auth = FirebaseAuth.instance;
+  var reviewController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -25,19 +28,30 @@ class _DetailScreenState extends State<DetailScreen> {
               context: context,
               builder: (BuildContext ctx) {
                 return GiffyDialog(
-                  content: Row(
-                    children: [
-
-                    ],
+                  content: TextField(
+                    controller: reviewController,
                   ),
+                    actions: [ElevatedButton(onPressed: (){
+                      var userReview = {
+                        'reviews' :FieldValue.arrayUnion([
+                          {
+                            'rating':reviewController.text,
+                            'username':  _auth.currentUser!.email
+                          }
+                        ])
+                      };
+
+                      db.collection('restaurants').doc(widget.details.id).update(userReview);
+
+                    }, child: Text('Submit'))],
                     giffy: Text('Add review'));
               });
-          print(widget.details.exists);
+          print(widget.details.id);
         },
         label: Text('Add Review'),
       ),
       appBar: AppBar(
-        title: const Text('PARIS'),
+        title: Text(widget.details['res_location']),
         backgroundColor: Colors.white,
         excludeHeaderSemantics: true,
         toolbarHeight: 80,
@@ -48,87 +62,94 @@ class _DetailScreenState extends State<DetailScreen> {
       ),
       body: Container(
         child: SafeArea(
-          child: Container(
-            child: FutureBuilder(
-                future: db.collection('restaurants').doc().get(),
-                builder: (context, snapshot) {
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Image.network(
-                        widget.details['image_url'],
-                        fit: BoxFit.contain,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            ListTile(
-                              leading: const Icon(
-                                Icons.food_bank,
-                                size: 45,
-                                color: Colors.lightBlueAccent,
-                              ),
-                              subtitle: Text(widget.details['res_location'],
+          child: SingleChildScrollView(
+            child: Container(
+              child: FutureBuilder(
+                  future: db.collection('restaurants').doc().get(),
+                  builder: (context, snapshot) {
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Image.network(
+                          widget.details['image_url'],
+                          fit: BoxFit.contain,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.food_bank,
+                                  size: 45,
+                                  color: Colors.lightBlueAccent,
+                                ),
+                                subtitle: Text(widget.details['res_location'],
+                                    style: TextStyle(
+                                      color: Colors.blue.shade800,
+                                      fontWeight: FontWeight.w400,
+                                    )),
+                                title: Text(
+                                  widget.details['res_name'],
                                   style: TextStyle(
-                                    color: Colors.blue.shade800,
-                                    fontWeight: FontWeight.w400,
-                                  )),
-                              title: Text(
-                                widget.details['res_name'],
+                                      color: Colors.blue.shade800,
+                                      fontWeight: FontWeight.w400,
+                                      fontSize: 32),
+                                ),
+                              ),
+                              const SizedBox(
+                                height: 16,
+                              ),
+                              Text(
+                                textAlign: TextAlign.start,
+                                'Review',
                                 style: TextStyle(
                                     color: Colors.blue.shade800,
                                     fontWeight: FontWeight.w400,
                                     fontSize: 32),
                               ),
-                            ),
-                            const SizedBox(
-                              height: 16,
-                            ),
-                            Text(
-                              textAlign: TextAlign.start,
-                              'Review',
-                              style: TextStyle(
-                                  color: Colors.blue.shade800,
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 32),
-                            ),
-                            ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: widget.details['reviews'].length,
-                              itemBuilder: (context, index) {
-                                var reviews = widget.details['reviews'][index];
-                                return ListTile(
-                                  leading: CircleAvatar(
-                                    child: AvatarPlus('sdsd'),
-                                  ),
-                                  title: Text(reviews['username']),
-                                  subtitle: Row(
-                                    children: [
-                                      for (var i = 0;
-                                          i < reviews['rating'];
-                                          i++)
-                                        Icon(
-                                          Icons.star,
-                                          color: Colors.yellow,
+                              StreamBuilder<DocumentSnapshot>(stream: db.collection('restaurants').doc(widget.details.id).snapshots(), builder: (ctx,snapshot){
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return Center(child: CircularProgressIndicator());
+                                }
+                                if (snapshot.hasError) {
+                                  return Center(child: Text('Error: ${snapshot.error}'));
+                                }
+            
+                                final data = snapshot.requireData;
+            
+                                return
+                                  ListView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: data['reviews'].length,
+                                    itemBuilder: (context, index) {
+                                      return ListTile(
+                                        leading: CircleAvatar(
+                                          child: AvatarPlus('john'),
                                         ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            )
-                          ],
-                        ),
-                      )
-                    ],
-                  );
-                }),
+                                        title: Text(data['reviews'][index]['username']),
+                                        subtitle: Text(data['reviews'][index]['rating']),
+                                      );
+                                    },
+                                  )
+            
+                                  ;
+                              })
+            
+                            ],
+                          ),
+                        )
+                      ],
+                    );
+                  }),
+            ),
           ),
         ),
       ),
     );
   }
 }
+
